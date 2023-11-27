@@ -2,6 +2,12 @@
 
 Xtyle Util Server
 
+## Install
+
+```sh
+npm i xtyle-server
+```
+
 ## File | `index.js`
 
 ```js
