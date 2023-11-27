@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "outDir": "./dist",
+    "lib": ["ESNext", "dom"],
+    "module": "esnext",
+    "target": "esnext",
+    "moduleResolution": "node",
+    "moduleDetection": "force",
+    //"allowImportingTsExtensions": true,
+    "noEmit": false,
+    "composite": true,
+    "strict": true,
+    "downlevelIteration": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "declaration": true,
+    "types": []
+  },
+  "exclude": ["node_modules", "dist"],
+  "include": ["index.ts", "src/**/*.ts"]
+}
