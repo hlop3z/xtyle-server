@@ -4,12 +4,13 @@ interface VarName {
   style: string;
 }
 
-type ComponentRow = {
+type ComponentInput = {
   name?: string;
   code?: string;
   props?: string;
   style?: string;
   docs?: string;
+  theme?: string;
 };
 
 type ComponentResult = {
@@ -21,6 +22,12 @@ type ComponentResult = {
   buildIndex: string;
   buildStyle: string;
   declaration: string;
+};
+
+type PluginInput = {
+  name?: string;
+  components?: ComponentInput[] = [];
+  install?: string | null = null;
 };
 
 type XtyleUtil = Record<string, () => Promise<string>>;
@@ -92,44 +99,27 @@ function hyphenatedToTitleCase(inputString: string): string {
     .join("");
 }
 
-function installCodeString(props: any): string {
-  return `
-export default function install(self, option) {
-    return {
-        init: ${ensureValueGlobal(props.init)},
-        store: ${ensureValueGlobal(props.store)},
-        globals: ${ensureValueGlobal(props.globals)},
-        directives: ${ensureValueGlobal(props.directives)},
-    };
-}
-`;
-}
-
 async function createComponent(
   util: XtyleUtil,
-  rowConfig: ComponentRow,
+  { name, code, props, style, docs, theme }: ComponentInput,
   esmodule: boolean = false
 ): Promise<ComponentResult> {
-  const { name, code, props, style, docs } = rowConfig;
   const className = hyphenatedToTitleCase(name || "").replace("-", "");
-  const varName: VarName = {
-    index: `const $NAME = "${className}";\n`,
-    style: `$NAME: "${className}";\n${style || ""}`,
-  };
 
-  // Pre-Setup
-  const styleString = varName.style;
-  const codeString = varName.index + (code || "");
+  const themeName = theme ? `${theme}__` : "";
+
+  const codeString = `const $NAME = "${themeName}${className}";\n${code || ""}`;
+  const styleString = `$NAME: "${themeName}${className}";\n${style || ""}`;
+
   const codeLive = selfStartingComponent(className, codeString);
 
-  // Declaration
   const declaration = createDeclaration(className, props, docs, esmodule);
 
-  // Renders
-  const renderIndex = await util.tsx(codeLive);
-  const renderStyle = await util.css(styleString);
+  const [renderIndex, renderStyle] = await Promise.all([
+    util.tsx(codeLive),
+    util.css(styleString),
+  ]);
 
-  // Component
   return {
     name: className,
     index: codeString,
@@ -199,62 +189,53 @@ async function buildXtylePlugin(
   };
 }
 
+function installCodeString(props: any): string {
+  return `
+export default function install(self, option) {
+    return {
+        init: ${ensureValueGlobal(props.init)},
+        store: ${ensureValueGlobal(props.store)},
+        globals: ${ensureValueGlobal(props.globals)},
+        directives: ${ensureValueGlobal(props.directives)},
+    };
+}
+`;
+}
+
 export default function (util: XtyleUtil) {
   const core = {
     component: async (
-      row: ComponentRow,
+      props: ComponentInput = {},
       esmodule: boolean = false
-    ): Promise<ComponentResult> => createComponent(util, row, esmodule),
+    ): Promise<ComponentResult> => createComponent(util, props, esmodule),
 
     plugin: async (
-      pluginName: string,
-      inputArray: ComponentRow[] = [],
-      installCode: string | null = null,
+      props: PluginInput = {},
       esmodule: boolean = false
     ): Promise<Record<string, string>> => {
+      const { name, components, install } = props;
       const allComponents = await Promise.all(
-        inputArray.map((row) => core.component(row, esmodule))
+        components.map((row) =>
+          core.component({ ...row, theme: name }, esmodule, name)
+        )
       );
       return buildXtylePlugin(
         util,
-        pluginName,
+        name,
         allComponents,
-        installCode,
+        installCodeString(install || {}),
         esmodule
       );
     },
   };
 
-  async function buildPlugin(
-    pluginName: string,
-    inputArray: ComponentRow[] = [],
-    installCode: string | null = null,
-    esmodule: boolean = false
-  ): Promise<Record<string, string>> {
-    const allComponents = await Promise.all(
-      inputArray.map((row) => core.component(row, esmodule))
-    );
-    return buildXtylePlugin(
-      util,
-      pluginName,
-      allComponents,
-      installCode,
-      esmodule
-    );
-  }
+  // Simplify the common pattern for wrapping an async function
+  const asyncWrapper = async (func: Function, ...args: any[]) =>
+    await func(...args);
 
   return {
     ...util,
-    component: core.component,
-    async component(row) {
-      return await core.component(row);
-    },
-    async plugin(props) {
-      return await buildPlugin(
-        props.name,
-        props.components,
-        installCodeString(props.install || {})
-      );
-    },
+    component: asyncWrapper.bind(null, core.component),
+    plugin: asyncWrapper.bind(null, core.plugin),
   };
 }

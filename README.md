@@ -75,6 +75,7 @@ const example = {
 
 // Usage
 xtyle.component({
+  theme: "my-lib", // Optional
   name: "kebab-case-name",
   code: example.code,
   style: example.style,
@@ -122,9 +123,17 @@ const demoData = (name) => {
 };
 
 const components = [demoData("custom-div"), demoData("button")];
-const install_code = {
+
+const install = {
+  directives: null,
+  globals: null,
+  store: null,
   init: `export default [() => console.log("Plugin INIT")]`,
 };
 
-xtyle.plugin("myPlugin", components, install_code);
+xtyle.plugin({
+  name: "my-lib",
+  components: components,
+  install: install,
+});
 ```

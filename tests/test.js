@@ -1,6 +1,9 @@
+import xtyle from "../dist/index.js";
+
 const demoData = (name) => {
   return {
     name: name,
+    theme: "demo",
     code: `
     export default function Component(props: Props = {}) {
       return (
@@ -33,4 +36,17 @@ const demoData = (name) => {
 
 const data = ["custom-div", "button"].map((name) => demoData(name));
 
-export default data;
+xtyle.component(data[0]).then((result) => {
+  console.log(result);
+});
+
+/*
+xtyle
+  .plugin({
+    name: "my_plugin",
+    components: data,
+  })
+  .then((result) => {
+    console.log(result);
+  });
+*/

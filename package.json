@@ -2,7 +2,7 @@
   "name": "xtyle-server",
   "module": "index.ts",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Xtyle Util Server",
   "author": "hlop3z",
   "license": "MIT",
@@ -11,7 +11,9 @@
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "npm run build && node tests/test.js",
+    "test:server": "npm run build && node tests/server.js"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
