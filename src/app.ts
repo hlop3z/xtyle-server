@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { removeSemiColon, createDeclaration } from "./typing.js";
+
 interface VarName {
   index: string;
   style: string;
@@ -32,26 +34,9 @@ type PluginInput = {
 
 type XtyleUtil = Record<string, () => Promise<string>>;
 
-function componentProps(code: string | null): string {
-  const clean = (code || "any")
-    .split("export default Props;")[0]
-    .replace("type Props = ", "")
-    .trim();
-  return clean.endsWith(";") ? clean.slice(0, -1) : clean;
-}
-
-function createDeclaration(
-  name: string,
-  props: string | null = null,
-  docs: string | null = null,
-  esmodule: boolean = false
-): string {
-  const esmCode = esmodule ? "export const " : "";
-  const readDocs = docs ? docs.trim() : "";
-  return `${readDocs}\n${esmCode}${name}: (props: ${componentProps(
-    props
-  )}) => object;`.trim();
-}
+/**
+ * @Declarations
+ */
 
 function createPluginDeclarations(
   name: string,
@@ -63,9 +48,14 @@ function createPluginDeclarations(
     : `declare const ${name}: {\n${content}\n}`;
 }
 
+function selfStartingFunction(javascript: string): string {
+  const _javascript = javascript || "";
+  const code = _javascript.replace(/export default/g, "return");
+  return `(function() { ${code} })();`;
+}
+
 function selfStartingComponent(name: string, javascript: string): string {
-  const code = javascript.replace(/export default/g, "return");
-  return `const ${name} = (function() { ${code} })();`;
+  return `const ${name} = ${selfStartingFunction(javascript)}`;
 }
 
 function selfStartingPlugin(
@@ -73,9 +63,8 @@ function selfStartingPlugin(
   javascript: string,
   esmodule: boolean = false
 ): string {
-  const code = javascript.replace(/export default/g, "return");
   const declaration = esmodule ? "const " : "var ";
-  return `${declaration}${name} = (function() { ${code} })();`;
+  return `${declaration}${name} = ${selfStartingFunction(javascript)}`;
 }
 
 function goodJavaScriptEnd(stringComponents: string): string {
@@ -84,12 +73,11 @@ function goodJavaScriptEnd(stringComponents: string): string {
 }
 
 function removeExportDefault(code: string): string {
-  return code ? code.replace("export default", "").trim() : "";
+  return code ? code.replace("export default", "").trim() : "null";
 }
 
 function ensureValueGlobal(code: string): string {
-  const text = removeExportDefault(code);
-  return text === "" ? "undefined" : text;
+  return code ? removeSemiColon(selfStartingFunction(code)) : "null";
 }
 
 function hyphenatedToTitleCase(inputString: string): string {
@@ -106,10 +94,12 @@ async function createComponent(
 ): Promise<ComponentResult> {
   const className = hyphenatedToTitleCase(name || "").replace("-", "");
 
-  const themeName = theme ? `${theme}__` : "";
+  // const themeName = theme ? `${theme}__` : "";
+  // const js_name = `const $NAME = "${themeName}${className}";\n`;
+  // const css_name = `$NAME: "${themeName}${className}";\n`;
 
-  const codeString = `const $NAME = "${themeName}${className}";\n${code || ""}`;
-  const styleString = `$NAME: "${themeName}${className}";\n${style || ""}`;
+  const codeString = `${code || ""}`;
+  const styleString = `${style || ""}`;
 
   const codeLive = selfStartingComponent(className, codeString);
 
@@ -171,7 +161,7 @@ async function buildXtylePlugin(
   const finalJsx = await util.minify(
     `${goodJavaScriptEnd(
       pluginString
-    )}${pluginName}.install = ${removeExportDefault(installCode || "null")};` +
+    )}${pluginName}.install = ${removeExportDefault(installCode)};` +
       (esmodule ? `export default ${pluginName};` : "")
   );
 
@@ -190,6 +180,10 @@ async function buildXtylePlugin(
 }
 
 function installCodeString(props: any): string {
+  props = props || {};
+  if (Object.keys(props).length === 0) {
+    return "";
+  }
   return `
 export default function install(self, option) {
     return {
@@ -197,7 +191,10 @@ export default function install(self, option) {
         store: ${ensureValueGlobal(props.store)},
         globals: ${ensureValueGlobal(props.globals)},
         directives: ${ensureValueGlobal(props.directives)},
-    };
+        actions: ${ensureValueGlobal(props.actions)},
+        models: ${ensureValueGlobal(props.models)},
+        router: ${ensureValueGlobal(props.router)},
+      };
 }
 `;
 }
@@ -214,18 +211,21 @@ export default function (util: XtyleUtil) {
       esmodule: boolean = false
     ): Promise<Record<string, string>> => {
       const { name, components, install } = props;
+
       const allComponents = await Promise.all(
         components.map((row) =>
           core.component({ ...row, theme: name }, esmodule, name)
         )
       );
-      return buildXtylePlugin(
+
+      const finalPlugin = buildXtylePlugin(
         util,
         name,
         allComponents,
-        installCodeString(install || {}),
+        installCodeString(install),
         esmodule
       );
+      return finalPlugin;
     },
   };
 
